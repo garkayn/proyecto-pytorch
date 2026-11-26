@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Duración de los hits de Spotify · Benchmark temporal</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172b2a;
+      --muted: #4f605d;
+      --accent: #076b55;
+      --actual: #ae481a;
+      --line: #dbe5df;
+      --paper: #fff;
+      font: 16px/1.5 system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3f7f4; color: var(--ink); }
+    .container { width: min(100% - 2rem, 58rem); margin-inline: auto; }
+    header { padding-block: 2.8rem 1.4rem; }
+    h1 { max-width: 16ch; margin: 0; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.05; letter-spacing: -.045em; }
+    h2 { margin: 0 0 .5rem; font-size: 1.35rem; }
+    p { margin: .5rem 0; }
+    header p, .note, .legend, dt { color: var(--muted); }
+    header p { margin-top: .8rem; }
+    main { padding-bottom: 2rem; }
+    section {
+      margin-bottom: 1rem;
+      padding: clamp(1rem, 4vw, 1.8rem);
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: .85rem;
+    }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; min-width: 26rem; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+    th, td { padding: .65rem .5rem; text-align: right; border-bottom: 1px solid var(--line); }
+    th:first-child { padding-left: 0; text-align: left; }
+    .note, .legend, .axis { font-size: .9rem; }
+    .note { margin-top: .85rem; }
+    img { display: block; width: 100%; height: auto; margin-top: .8rem; }
+    label { display: block; margin-bottom: .3rem; font-weight: 650; }
+    select {
+      width: min(100%, 37rem);
+      padding: .62rem;
+      color: var(--ink);
+      background: var(--paper);
+      border: 1px solid #819991;
+      border-radius: .45rem;
+      font: inherit;
+    }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .6rem; margin: 1.25rem 0; }
+    dl div { padding: .65rem .8rem; background: #edf5f1; border-radius: .45rem; }
+    dt { font-size: .88rem; }
+    dd { margin: 0; font-size: 1.25rem; font-weight: 670; font-variant-numeric: tabular-nums; }
+    .track { position: relative; height: .85rem; margin-top: 1.7rem; background: #e9eeeb; border-radius: .3rem; }
+    .range { position: absolute; inset-block: 0; background: #a1d6c4; border-radius: inherit; }
+    .marker { position: absolute; width: 3px; transform: translateX(-50%); }
+    .median { inset-block: -.35rem 0; background: var(--accent); }
+    .actual { inset-block: 0 -.35rem; background: var(--actual); }
+    .axis { display: flex; justify-content: space-between; margin-top: .5rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin-top: .65rem; }
+    .legend span::before { content: ""; display: inline-block; width: .7rem; height: .7rem; margin-right: .3rem; border-radius: .15rem; background: var(--swatch); }
+    @media (max-width: 36rem) {
+      table { min-width: 0; font-size: .8rem; }
+      th, td { padding-inline: .2rem; }
+      td { white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+  <header class="container">
+    <h1>¿Cuánto dura un hit?</h1>
+    <p>Benchmark de duración de canciones de Spotify con PyTorch<br>Prueba temporal · $test_first–$test_last · $test_rows canciones</p>
+  </header>
+  <main class="container">
+    <section>
+      <h2>Resultados en la prueba temporal</h2>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="Resultados por modelo">
+        <table aria-label="Métricas de prueba">
+          <thead><tr><th scope="col">Modelo</th><th scope="col">MAE</th><th scope="col">Cobertura</th><th scope="col">Ancho medio</th></tr></thead>
+          <tbody>$table_rows</tbody>
+        </table>
+      </div>
+      <p class="note">El MAE es el error absoluto medio. La cobertura mide el porcentaje de canciones dentro del rango, con un objetivo nominal del 80%. La mediana histórica usa los percentiles 10 y 90 del entrenamiento como rango fijo.</p>
+    </section>
+    <section>
+      <h2>Error por año</h2>
+      <img src="data:image/png;base64,$plot" alt="Gráfico de líneas del error absoluto medio por año para la mediana histórica, el Random Forest y la MLP, con el número de canciones de cada año.">
+    </section>
+    <section>
+      <h2>Explorador de canciones</h2>
+      <label for="song">Canción del conjunto de prueba</label>
+      <select id="song" disabled></select>
+      <noscript><p>Activa JavaScript para usar el explorador.</p></noscript>
+      <div id="explorer" hidden>
+        <dl aria-live="polite" aria-atomic="true">
+          <div><dt>Duración real</dt><dd id="actual"></dd></div>
+          <div><dt>Mediana estimada</dt><dd id="median"></dd></div>
+          <div><dt>Rango estimado</dt><dd id="interval"></dd></div>
+        </dl>
+        <div class="track" aria-hidden="true">
+          <div id="range" class="range"></div>
+          <div id="median-marker" class="marker median"></div>
+          <div id="actual-marker" class="marker actual"></div>
+        </div>
+        <div class="axis" aria-hidden="true"><span>0:00</span><span id="axis-end"></span></div>
+        <div class="legend" aria-hidden="true">
+          <span style="--swatch: #ae481a">Duración real</span>
+          <span style="--swatch: #076b55">Mediana estimada</span>
+          <span style="--swatch: #a1d6c4">Percentiles 10 a 90</span>
+        </div>
+        <p class="note" id="status"></p>
+      </div>
+    </section>
+  </main>
+  <script id="records" type="application/json">$records</script>
+  <script>
+    const songs = JSON.parse(document.getElementById("records").textContent);
+    const select = document.getElementById("song");
+    const actual = document.getElementById("actual");
+    const median = document.getElementById("median");
+    const interval = document.getElementById("interval");
+    const range = document.getElementById("range");
+    const medianMarker = document.getElementById("median-marker");
+    const actualMarker = document.getElementById("actual-marker");
+    const axisEnd = document.getElementById("axis-end");
+    const statusText = document.getElementById("status");
+
+    function clock(seconds, showTenths = false) {
+      const units = showTenths ? 10 : 1;
+      const rounded = Math.round(seconds * units);
+      const minutes = Math.floor(rounded / (60 * units));
+      const wholeSeconds = String(Math.floor(rounded / units) % 60).padStart(2, "0");
+      const tenths = showTenths ? "," + (rounded % units) : "";
+      return minutes + ":" + wholeSeconds + tenths;
+    }
+
+    function renderSong() {
+      const song = songs[Number(select.value)];
+      const lower = song.mlp_p10_s;
+      const center = song.mlp_p50_s;
+      const upper = song.mlp_p90_s;
+      const observed = song.actual_s;
+      const scale = Math.ceil(Math.max(upper, observed) * 1.1 / 30) * 30;
+      const position = (seconds) => (100 * seconds / scale) + "%";
+      actual.textContent = clock(observed, true);
+      median.textContent = clock(center, true);
+      interval.textContent = clock(lower, true) + " a " + clock(upper, true);
+      range.style.left = position(lower);
+      range.style.width = position(upper - lower);
+      medianMarker.style.left = position(center);
+      actualMarker.style.left = position(observed);
+      axisEnd.textContent = clock(scale);
+      const outside = observed < lower || observed > upper;
+      statusText.textContent = outside
+        ? "La duración real está fuera del rango estimado."
+        : "La duración real está dentro del rango estimado.";
+      if (outside && [lower, upper].some((limit) => clock(limit, true) === actual.textContent)) {
+        statusText.textContent = "La duración real está fuera del rango por menos de 0,1 s.";
+      }
+    }
+
+    songs.forEach((song, index) => {
+      select.add(new Option(song.artist + " — " + song.song + " (" + song.year + ")", index));
+    });
+    select.disabled = false;
+    select.addEventListener("change", renderSong);
+    renderSong();
+    document.getElementById("explorer").hidden = false;
+  </script>
+</body>
+</html>
